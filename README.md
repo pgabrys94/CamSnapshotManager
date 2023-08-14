@@ -3,7 +3,13 @@ Program do zarządzania ujęciami z kamery CCTV.
 Pozwala na ustawianie czasu po jakim pliki zdjęć mają zostać usunięte.
 
 Wykorzystane moduły:
-os, json, sys, re, datetime, crontab
+-os,
+-json,
+-sys,
+-re,
+-datetime,
+-crontab
+    pip install python-crontab
     
     Parametry:
         [-h] wyświetla informacje o programie,

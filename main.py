@@ -24,8 +24,8 @@ def settings_file(param="check", **kwargs):
     param_list = ["check", "create", "modify"]
 
     if param == param_list[0]:
-        if os.path.exists(file):
-            with open(file, "r") as f:
+        if os.path.exists(sfile):
+            with open(sfile, "r") as f:
                 data = json.load(f)
                 if len(data) == len(set_list):
                     return True
@@ -35,18 +35,18 @@ def settings_file(param="check", **kwargs):
             return False
     elif param == param_list[1]:
         settings = {set_list[0]: "False", set_list[1]: "", set_list[2]: "90d"}
-        with open(file, "w") as f:
+        with open(sfile, "w") as f:
             json.dump(settings, f)
     elif param == param_list[2]:
-        with open(file, "r") as f:
+        with open(sfile, "r") as f:
             data = json.load(f)
         for key, value in kwargs.items():
             if key in set_list:
                 data[key] = value
-        with open(file, "w") as f:
+        with open(sfile, "w") as f:
             json.dump(data, f)
     elif param in set_list[0:4]:
-        with open(file, "r") as f:
+        with open(sfile, "r") as f:
             data = json.load(f)
             result = data[param]
         return result
@@ -65,7 +65,7 @@ def timespan_values(value):
 
 def execute():
     now = dt.now().timestamp()
-    with open(file, "r") as f:
+    with open(sfile, "r") as f:
         data = json.load(f)
         fpath = data["path"]
         fspan = timespan_values(data["timespan"])
@@ -78,8 +78,31 @@ def execute():
                 os.remove(filepath)
 
 
-def set_path():
-    pass
+def set_path(param="check"):
+    param_list = ["check", "set"]
+
+    def path_check(path):
+        return os.path.exists(path)
+
+    def path_set():
+        u_in = "Wprowadź pełną ścieżkę do folderu: "
+
+        if path_check(u_in):
+            with open(sfile, "w") as f1:
+                data1 = json.load(f1)
+                data1["path"] = u_in
+                json.dump(data1, f1)
+            print("Pomyślnie zapisano ścieżkę.")
+        else:
+            print("Błąd. Ścieżka nie istnieje.")
+
+    if param == param_list[0]:
+        with open(sfile, "r") as f:
+            data = json.load(f)
+            fpath = data["path"]
+        return path_check(fpath)
+    if param == param_list[1]:
+        path_set()
 
 
 def set_time():
@@ -87,7 +110,8 @@ def set_time():
         h - godziny
         d - dni
 
-    Przykład: 72h - 72 godziny, 90d - 90 dni   
+    Przykład: 72h - 72 godziny, 90d - 90 dni
+    Domyślnie: 90d   
     """
     print(text)
     u_in = input("Wprowadź wartość z sufiksem i zatwierdź klawiszem [Enter]: ")
@@ -106,23 +130,27 @@ def set_time():
 
 def switch():
     def cron_man(param, *time):
-        plist = ["a", "r"]
+        param_list = ["a", "r"]
         cron = CronTab(user=os.getlogin())
         command = "/usr/bin/python {} -x".format(pfile)
-        if param == plist[0]:
+        if param == param_list[0]:
             stime = str(time[0]).split(":")
             job = cron.new(command=command)
             job.setall("{} {} * * *".format(stime[1], stime[0]))
             cron.write()
-        elif param == plist[1]:
+        elif param == param_list[1]:
             for job in cron:
                 if job.command == command:
                     cron.remove(job)
             cron.write()
 
-    if is_on():
-        settings_file("modify", active=False)
-        cron_man("r")
+    if settings_file("active") and settings_file():
+        if set_path():
+            settings_file("modify", active=False)
+            cron_man("r")
+        else:
+            print("Brak ścieżki do folderu. Skonfiguruj ścieżkę.")
+            set_path("set")
     else:
         u_in = input("Wprowadź czas (hh:mm) uruchomienia programu: ")
 
@@ -130,18 +158,25 @@ def switch():
         cron_man("a", u_in)
 
 
-def is_on():
-    return settings_file("active")
-
-
 def main():
-    operation = "Wyłącz" if is_on() else "Włącz"
+    if not os.path.exists(sfile):
+        settings_file("create")
+    operation = "Wyłącz" if not settings_file("active") else "Włącz"
     main_opt = {"1": f"{operation}", "2": "Wskaż lokalizację folderu", "3": "Zmień okres przechowywania zdjęć",
                 "4": "Wyjście"}
     opts = list(main_opt)
     print(os.path.dirname(os.path.abspath(__file__)))
-
     while True:
+        with open(sfile, "r") as f:
+            data = json.load(f)
+            text = """{}
+    CamSnapshotManager
+{}
+Status: {}
+Ścieżka: {}
+Czas przechowywania: {}
+""".format("-"*26, "-"*26, "Wyłączony" if settings_file("active") else "Włączony", data["path"], data["timespan"])
+        print(text)
         for opt, desc in main_opt.items():
             print("[{}] - {}".format(opt, desc))
 

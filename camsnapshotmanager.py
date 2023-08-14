@@ -1,3 +1,4 @@
+#!/usr/bin/python3.11
 # -*- coding: utf-8 -*-
 
 import os
@@ -28,10 +29,13 @@ def settings_file(param="check", **kwargs):
     if param == param_list[0]:
         if os.path.exists(sfile):
             with open(sfile, "r") as f:
-                data = json.load(f)
-                if len(data) == len(set_list):
-                    return True
-                else:
+                try:
+                    data = json.load(f)
+                    if len(data) == len(set_list):
+                        return True
+                    else:
+                        return False
+                except json.decoder.JSONDecodeError:
                     return False
         else:
             return False
@@ -87,12 +91,13 @@ def set_path(param="check"):
         return os.path.exists(path)
 
     def path_set():
-        u_in = "Wprowadź pełną ścieżkę do folderu: "
+        u_in = input("Wprowadź pełną ścieżkę do folderu: ")
 
         if path_check(u_in):
-            with open(sfile, "w") as f1:
+            with open(sfile, "r") as f1:
                 data1 = json.load(f1)
-                data1["path"] = u_in
+            data1["path"] = u_in
+            with open(sfile, "w") as f1:
                 json.dump(data1, f1)
             print("Pomyślnie zapisano ścieżkę.")
         else:
@@ -191,7 +196,7 @@ Czas przechowywania: {}
         elif u_in == opts[2]:
             set_time()
         elif u_in == opts[1]:
-            set_path()
+            set_path("set")
         elif u_in == opts[0]:
             switch()
 
@@ -203,10 +208,11 @@ pfile = os.path.join(program_dir, pfilename)
 
 if len(sys.argv) == 2 and sys.argv[1] == "-x" and settings_file():
     execute()
-elif len(sys.argv) == 2 and sys.argv[1] == "-x" and not settings_file():
+elif len(sys.argv) == 2 and (sys.argv[1] == "-x" or sys.argv[1] == "-m") and not settings_file():
     print("Brak pliku konfiguracyjnego lub uszkodzony plik - SKONFIGURUJ PROGRAM")
+    settings_file("create")
     main()
-elif len(sys.argv) == 2 and sys.argv[1] == "-m":
+elif len(sys.argv) == 2 and sys.argv[1] == "-m" and settings_file():
     main()
 elif len(sys.argv) == 2 and sys.argv[1] == "-h":
     info()

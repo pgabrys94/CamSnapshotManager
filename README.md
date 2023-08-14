@@ -1,6 +1,9 @@
 # CamSnapshotManager
 Program do zarządzania ujęciami z kamery CCTV.
 Pozwala na ustawianie czasu po jakim pliki zdjęć mają zostać usunięte.
+
+Wykorzystanie moduły:
+os, json, sys, re, datetime, crontab
     
     Parametry:
         [-h] wyświetla informacje o programie,

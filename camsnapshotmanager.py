@@ -134,7 +134,7 @@ def switch():
     def cron_man(param, *time):
         param_list = ["a", "r"]
         cron = CronTab(user=os.getlogin())
-        command = "/usr/bin/python {} -x".format(pfile)
+        command = "/usr/bin/python3.11 {} -x".format(pfile)
         if param == param_list[0]:
             stime = str(time[0]).split(":")
             job = cron.new(command=command)

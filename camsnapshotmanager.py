@@ -9,17 +9,29 @@ from datetime import datetime as dt
 from crontab import CronTab
 
 
-def info():
-    text = """CamSnapshotManager
-    Autor: Paweł Gabryś
-    Program do zarządzania ujęciami z kamery CCTV.
-    Pozwala na ustawianie czasu po jakim pliki zdjęć mają zostać usunięte.
+def info(param="read"):
+    inf = {
+        "title":  "CamSnapshotManager",
+        "author": "Paweł Gabryś",
+        "version": "1.3"
+    }
+
+    text = """{}
+Autor: {}
+Program do zarządzania ujęciami z kamery CCTV.
+Pozwala na ustawianie czasu po jakim pliki zdjęć mają zostać usunięte.
     
-    Parametry:
-        [-h] wyświetla informacje o programie,
-        [-x] wykonuje skrypt z pomocą zapisanych ustawień,
-        [-m] wyświetla menu programu."""
-    print(text)
+Parametry:
+    [-h] wyświetla informacje o programie,
+    [-x] wykonuje skrypt z pomocą zapisanych ustawień,
+    [-m] wyświetla menu programu,
+    [-v] wyświetla wersję programu
+    [-i] wyświetla wszystkie podstawowe informacje""".format(inf["title"], inf["author"], inf["version"])
+
+    if param == "read":
+        print(text)
+    else:
+        return inf[param]
 
 
 def settings_file(param="check", **kwargs):
@@ -57,7 +69,7 @@ def settings_file(param="check", **kwargs):
             result = data[param]
         return result
     else:
-        return "ERROR"
+        return print("ERROR")
 
 
 def timespan_values(value):
@@ -166,23 +178,26 @@ def switch():
 
 
 def main():
-    if not os.path.exists(sfile):
-        settings_file("create")
-    operation = "Wyłącz" if not settings_file("active") else "Włącz"
-    main_opt = {"1": f"{operation}", "2": "Wskaż lokalizację folderu", "3": "Zmień okres przechowywania zdjęć",
-                "4": "Wyjście"}
-    opts = list(main_opt)
-    print(os.path.dirname(os.path.abspath(__file__)))
+    print(settings_file("active"))
     while True:
+        if not os.path.exists(sfile):
+            settings_file("create")
+        operation = "Wyłącz" if settings_file("active") is True else "Włącz"
+        main_opt = {"1": f"{operation}", "2": "Wskaż lokalizację folderu", "3": "Zmień okres przechowywania zdjęć",
+                    "4": "Wyjście"}
+        opts = list(main_opt)
+
         with open(sfile, "r") as f:
             data = json.load(f)
-            text = """{}
-    CamSnapshotManager
+            text = """
+{}
+CamSnapshotManager
 {}
 Status: {}
 Ścieżka: {}
 Czas przechowywania: {}
-""".format("-"*26, "-"*26, "Wyłączony" if settings_file("active") else "Włączony", data["path"], data["timespan"])
+""".format("-" * len(info("title")), "-" * len(info("title")),
+                "Wyłączony" if not settings_file("active") is True else "Włączony", data["path"], data["timespan"])
         print(text)
         for opt, desc in main_opt.items():
             print("[{}] - {}".format(opt, desc))
@@ -216,5 +231,9 @@ elif len(sys.argv) == 2 and sys.argv[1] == "-m" and settings_file():
     main()
 elif len(sys.argv) == 2 and sys.argv[1] == "-h":
     info()
+elif len(sys.argv) == 2 and sys.argv[1] == "-v":
+    print(info("version"))
+elif len(sys.argv) == 2 and sys.argv[1] == "-i":
+    print(info("title"), "v" + info("version"), "by", info("author"))
 else:
     print("Błąd. Użyj parametru -h aby uzyskać listę opcji.")

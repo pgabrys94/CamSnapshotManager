@@ -178,7 +178,6 @@ def switch():
 
 
 def main():
-    print(settings_file("active"))
     while True:
         if not os.path.exists(sfile):
             settings_file("create")
@@ -202,7 +201,7 @@ Czas przechowywania: {}
         for opt, desc in main_opt.items():
             print("[{}] - {}".format(opt, desc))
 
-        u_in = input("Wybierz opcję i zatwierdź klawiszem [Enter]: ")
+        u_in = input("\nWybierz opcję i zatwierdź klawiszem [Enter]: ")
 
         if u_in not in str(list(main_opt)):
             print("Błąd.")

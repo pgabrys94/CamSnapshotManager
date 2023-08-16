@@ -16,7 +16,7 @@ def info(param="read"):
         "version": "1.3"
     }
 
-    text = """{}
+    txt = """{}
 Autor: {}
 Program do zarządzania ujęciami z kamery CCTV.
 Pozwala na ustawianie czasu po jakim pliki zdjęć mają zostać usunięte.
@@ -29,21 +29,21 @@ Parametry:
     [-i] wyświetla wszystkie podstawowe informacje""".format(inf["title"], inf["author"], inf["version"])
 
     if param == "read":
-        print(text)
+        print(txt)
     else:
         return inf[param]
 
 
-def settings_file(param="check", **kwargs):
-    set_list = ["active", "path", "timespan"]
-    param_list = ["check", "create", "modify"]
+def settings_file(param="check", _index=0, **kwargs):
+    set_list = ["active", "timespan", "path"]
+    param_list = ["check", "create", "modify", "paths_quantity"]
 
-    if param == param_list[0]:
+    def file_check():
         if os.path.exists(sfile):
-            with open(sfile, "r") as f:
+            with open(sfile, "r") as f1:
                 try:
-                    data = json.load(f)
-                    if len(data) == len(set_list):
+                    data_check = json.load(f1)
+                    if len(data_check[_index]) == len(set_list[:2]):
                         return True
                     else:
                         return False
@@ -51,25 +51,29 @@ def settings_file(param="check", **kwargs):
                     return False
         else:
             return False
+
+    if param == param_list[0]:
+        return file_check()
     elif param == param_list[1]:
-        settings = {set_list[0]: "False", set_list[1]: "", set_list[2]: "90d"}
         with open(sfile, "w") as f:
-            json.dump(settings, f)
-    elif param == param_list[2]:
-        with open(sfile, "r") as f:
-            data = json.load(f)
-        for key, value in kwargs.items():
-            if key in set_list:
-                data[key] = value
-        with open(sfile, "w") as f:
-            json.dump(data, f)
-    elif param in set_list[0:4]:
-        with open(sfile, "r") as f:
-            data = json.load(f)
-            result = data[param]
-        return result
+            settings = [{set_list[0]: "False", set_list[1]: "90d"}, {set_list[2]: ""}]
+            json.dump(settings, f, indent=4)
+
     else:
-        return print("ERROR")
+        if file_check():
+            with open(sfile, "r") as f:
+                data = json.load(f)
+
+                if param == param_list[2]:
+                    for key, value in kwargs.items():
+                        if key in set_list:
+                            data[_index][key] = value
+                            with open(sfile, "w") as nf:
+                                json.dump(data, nf, indent=4)
+                elif param == param_list[3]:
+                    return len(list(data[1:]))
+                elif param in set_list[0:4]:
+                    return data[_index][param]
 
 
 def timespan_values(value):
@@ -83,68 +87,128 @@ def timespan_values(value):
 
 def execute():
     now = dt.now().timestamp()
-    with open(sfile, "r") as f:
-        data = json.load(f)
-        fpath = data["path"]
-        fspan = timespan_values(data["timespan"])
+    for path_index in list(range(1, settings_file("paths_quantity"))):
+        fpath = settings_file("path", path_index)
+        fspan = timespan_values(settings_file("timespan"))
 
-    for file1 in os.listdir(fpath):
-        filepath = os.path.join(fpath, file1)
-        time_diff = now - os.path.getctime(filepath)
-        if os.path.isfile(filepath):
-            if time_diff >= fspan:
-                os.remove(filepath)
+        for file1 in os.listdir(fpath):
+            filepath = os.path.join(fpath, file1)
+            time_diff = now - os.path.getctime(filepath)
+            if os.path.isfile(filepath):
+                if time_diff >= fspan:
+                    os.remove(filepath)
 
 
 def set_path(param="check"):
     param_list = ["check", "set"]
 
-    def path_check(path):
-        return os.path.exists(path)
-
-    def path_set():
-        u_in = input("Wprowadź pełną ścieżkę do folderu: ")
-
-        if path_check(u_in):
-            with open(sfile, "r") as f1:
-                data1 = json.load(f1)
-            data1["path"] = u_in
-            with open(sfile, "w") as f1:
-                json.dump(data1, f1)
-            print("Pomyślnie zapisano ścieżkę.")
+    def path_check(path="", index=1):
+        if path == "":
+            return os.path.exists(data[index]["path"])
         else:
-            print("Błąd. Ścieżka nie istnieje.")
+            return os.path.exists(path)
+
+    def path_set(index=1, *manage_path):
+
+        if "d" in manage_path:
+            print("Usunięto ścieżkę: '{}'".format(data[index]["path"]))
+            data.pop(index)
+            if len(data) < 2:
+                data.append({"path": ""})
+            with open(sfile, "w") as f1:
+                json.dump(data, f1, indent=4)
+        else:
+            path_u_in = input("Wprowadź pełną ścieżkę do folderu: ")
+
+            if path_check(path_u_in) and path_u_in != "":
+                if data[index]["path"] == "":
+                    data[index]["path"] = path_u_in
+                elif data[index]["path"] != "" and "a" in manage_path:
+                    data[index]["path"] = path_u_in
+                else:
+                    data.append({"path": path_u_in})
+                    index += 1
+                with open(sfile, "w") as f1:
+                    json.dump(data, f1, indent=4)
+                print("Pomyślnie zapisano ścieżkę: '{}'".format(data[index]["path"]))
+            else:
+                err = "Błąd. Ścieżka nie istnieje."
+                print("\n{0}\n{1}\n{0}".format("-" * len(err), err))
+
+    def manage(choice):
+        options = {"1": "Edytuj", "2": "Usuń"}
+        while True:
+            print("Ścieżka: '{}'".format(data[choice]["path"]))
+            for opt in options:
+                print("[{}] - {}".format(opt, options[opt]))
+
+            u_in_manage = input("Wybór ([Enter] by powrócić): ")
+
+            if u_in_manage.isdigit() and u_in_manage in list(options):
+                if u_in_manage == "1":
+                    path_set(int(choice), "a")
+                elif u_in_manage == "2":
+                    path_set(int(choice), "d")
+                    break
+            elif u_in_manage == "":
+                break
+            else:
+                "\nSpróbuj ponownie.\n"
+
+    with open(sfile, "r") as f:
+        data = json.load(f)
 
     if param == param_list[0]:
-        with open(sfile, "r") as f:
-            data = json.load(f)
-            fpath = data["path"]
-        return path_check(fpath)
+        return path_check()
     if param == param_list[1]:
-        path_set()
+        while True:
+            txt = ["\nZarządzaj ścieżką:", "[+] - nowa ścieżka...", "<brak ścieżek>"]
+
+            print(txt[0])
+            if data[1]["path"] == "":
+                print(txt[2])
+            else:
+                for ind in list(range(1, settings_file("paths_quantity") + 1)):
+                    print("[{}] - '{}'".format(ind, data[ind]["path"]))
+            print("-" * len(txt[0]), "\n{}".format(txt[1]))
+
+            u_in = input("Wybór ([Enter] by powrócić): ")
+            if u_in.isdigit() and int(u_in) in list(range(1, settings_file("paths_quantity") + 1)):
+                manage(int(u_in))
+            elif u_in == "+":
+                path_set(settings_file("paths_quantity"))
+            elif u_in == "":
+                break
+            else:
+                print("\nSpróbuj ponownie.\n")
 
 
 def set_time():
-    text = """ Obsługiwane sufiksy:
-        h - godziny
-        d - dni
+    txt = """
+Obsługiwane sufiksy:
+    h - godziny
+    d - dni
 
-    Przykład: 72h - 72 godziny, 90d - 90 dni
-    Domyślnie: 90d   
-    """
-    print(text)
+Przykład: 72h - 72 godziny, 90d - 90 dni
+Domyślnie: 90d   
+"""
+    print(txt)
     u_in = input("Wprowadź wartość z sufiksem i zatwierdź klawiszem [Enter]: ")
     u_in = u_in.lower()
 
-    time, mod = re.split(r'(\d+)', u_in)[1:3]
-
-    if time.isdigit():
-        if mod == "h" or mod == "d":
-            settings_file("modify", timespan=u_in)
-        else:
-            print("Błąd. Błędny sufiks.")
+    if u_in == "":
+        return
     else:
-        print("Błąd. Błędna wartość.")
+        try:
+            time, mod = re.split(r'(\d+)', u_in)[1:]
+            if time.isdigit():
+                if mod == "h" or mod == "d":
+                    settings_file("modify", timespan=u_in)
+                    print("Pomyślnie zmieniono wartość.")
+                else:
+                    print("Błąd. Błędny sufiks.")
+        except ValueError as kurwa:
+            print("Błąd. Błędna wartość.", kurwa)
 
 
 def switch():
@@ -168,7 +232,8 @@ def switch():
             settings_file("modify", active=False)
             cron_man("r")
         else:
-            print("Brak ścieżki do folderu. Skonfiguruj ścieżkę.")
+            txt = "Brak ścieżki do folderu. Skonfiguruj ścieżkę."
+            print("\n{0}\n{1}\n{0}".format("-" * len(txt), txt))
             set_path("set")
     else:
         u_in = input("Wprowadź czas (hh:mm) uruchomienia programu: ")
@@ -182,29 +247,27 @@ def main():
         if not os.path.exists(sfile):
             settings_file("create")
         operation = "Wyłącz" if settings_file("active") is True else "Włącz"
-        main_opt = {"1": f"{operation}", "2": "Wskaż lokalizację folderu", "3": "Zmień okres przechowywania zdjęć",
+        main_opt = {"1": f"{operation}", "2": "Wskaż ścieżki do folderów", "3": "Zmień okres przechowywania zdjęć",
                     "4": "Wyjście"}
         opts = list(main_opt)
 
-        with open(sfile, "r") as f:
-            data = json.load(f)
-            text = """
-{}
-CamSnapshotManager
-{}
-Status: {}
-Ścieżka: {}
-Czas przechowywania: {}
-""".format("-" * len(info("title")), "-" * len(info("title")),
-                "Wyłączony" if not settings_file("active") is True else "Włączony", data["path"], data["timespan"])
-        print(text)
+        txt = """
+{0}
+{1}
+{0}
+
+Status: {2}
+Czas przechowywania: {3}
+""".format("-" * len(info("title")), info("title"),
+            "Wyłączony" if not settings_file("active") is True else "Włączony", settings_file("timespan"))
+        print(txt)
         for opt, desc in main_opt.items():
             print("[{}] - {}".format(opt, desc))
 
         u_in = input("\nWybierz opcję i zatwierdź klawiszem [Enter]: ")
 
         if u_in not in str(list(main_opt)):
-            print("Błąd.")
+            print("Spróbuj ponownie.")
         elif u_in == opts[3]:
             break
         elif u_in == opts[2]:
@@ -223,7 +286,8 @@ pfile = os.path.join(program_dir, pfilename)
 if len(sys.argv) == 2 and sys.argv[1] == "-x" and settings_file():
     execute()
 elif len(sys.argv) == 2 and (sys.argv[1] == "-x" or sys.argv[1] == "-m") and not settings_file():
-    print("Brak pliku konfiguracyjnego lub uszkodzony plik - SKONFIGURUJ PROGRAM")
+    text = "Brak pliku konfiguracyjnego lub uszkodzony plik - SKONFIGURUJ PROGRAM"
+    print("\n{0}\n{1}\n{0}".format("-" * len(text), text))
     settings_file("create")
     main()
 elif len(sys.argv) == 2 and sys.argv[1] == "-m" and settings_file():

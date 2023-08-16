@@ -13,7 +13,7 @@ def info(param="read"):
     inf = {
         "title":  "CamSnapshotManager",
         "author": "Paweł Gabryś",
-        "version": "1.3"
+        "version": "2.1"
     }
 
     txt = """{}
@@ -58,7 +58,6 @@ def settings_file(param="check", _index=0, **kwargs):
         with open(sfile, "w") as f:
             settings = [{set_list[0]: "False", set_list[1]: "90d"}, {set_list[2]: ""}]
             json.dump(settings, f, indent=4)
-
     else:
         if file_check():
             with open(sfile, "r") as f:
@@ -73,7 +72,7 @@ def settings_file(param="check", _index=0, **kwargs):
                 elif param == param_list[3]:
                     return len(list(data[1:]))
                 elif param in set_list[0:4]:
-                    return data[_index][param]
+                    return data[(_index if param != set_list[2] else _index + 1)][param]
 
 
 def timespan_values(value):
@@ -86,17 +85,20 @@ def timespan_values(value):
 
 
 def execute():
-    now = dt.now().timestamp()
-    for path_index in list(range(1, settings_file("paths_quantity"))):
-        fpath = settings_file("path", path_index)
-        fspan = timespan_values(settings_file("timespan"))
+    with open(sfile, "r") as f:
+        data = json.load(f)
 
-        for file1 in os.listdir(fpath):
-            filepath = os.path.join(fpath, file1)
-            time_diff = now - os.path.getctime(filepath)
-            if os.path.isfile(filepath):
-                if time_diff >= fspan:
-                    os.remove(filepath)
+    print("Rzeczywista ilość ścieżek:", len(list(data[1:])))
+    indexes = list(range(1, len(list(data[1:])) + 1))
+    print("Lista indeksów:", indexes)
+    for path_index in indexes:
+        print("Lista indeksów w pętli:", indexes)
+        print("Wartość i typ iterowanego indeksu:", path_index, type(path_index))
+        fpath = data[path_index]["path"]
+        print("Ścieżka do folderu: {}".format(fpath))
+        fspan = timespan_values(settings_file("timespan"))
+        print("Maksymalny wiek w (s): {}".format(fspan))
+        print("Liczba plików w podanej lokalizacji: {}".format(len(os.listdir(fpath))))
 
 
 def set_path(param="check"):

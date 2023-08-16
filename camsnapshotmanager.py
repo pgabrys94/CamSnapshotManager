@@ -87,18 +87,19 @@ def timespan_values(value):
 def execute():
     with open(sfile, "r") as f:
         data = json.load(f)
-
-    print("Rzeczywista ilość ścieżek:", len(list(data[1:])))
     indexes = list(range(1, len(list(data[1:])) + 1))
-    print("Lista indeksów:", indexes)
+    now = dt.now().timestamp()
+
     for path_index in indexes:
-        print("Lista indeksów w pętli:", indexes)
-        print("Wartość i typ iterowanego indeksu:", path_index, type(path_index))
         fpath = data[path_index]["path"]
-        print("Ścieżka do folderu: {}".format(fpath))
         fspan = timespan_values(settings_file("timespan"))
-        print("Maksymalny wiek w (s): {}".format(fspan))
-        print("Liczba plików w podanej lokalizacji: {}".format(len(os.listdir(fpath))))
+
+        for file1 in os.listdir(fpath):
+            filepath = os.path.join(fpath, file1)
+            time_diff = now - os.path.getctime(filepath)
+            if os.path.isfile(filepath):
+                if time_diff >= fspan:
+                    os.remove(filepath)
 
 
 def set_path(param="check"):

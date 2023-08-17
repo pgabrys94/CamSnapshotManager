@@ -210,8 +210,8 @@ Domyślnie: 90d
                     print("Pomyślnie zmieniono wartość.")
                 else:
                     print("Błąd. Błędny sufiks.")
-        except ValueError as kurwa:
-            print("Błąd. Błędna wartość.", kurwa)
+        except ValueError:
+            print("Błąd. Błędna wartość.")
 
 
 def switch():

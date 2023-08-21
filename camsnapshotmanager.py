@@ -18,7 +18,7 @@ def info(param="read"):
     inf = {
         "title":  "CamSnapshotManager",
         "author": "Paweł Gabryś",
-        "version": "2.1"
+        "version": "2.2"
     }
 
     txt = """{}

@@ -23,6 +23,8 @@ Wykorzystane moduły:
     
 Parametry:
 
-        [-h] wyświetla informacje o programie,
+        [-h] wyświetla pełne informacje o programie,
         [-x] wykonuje skrypt z pomocą zapisanych ustawień,
-        [-m] wyświetla menu programu.
+        [-m] wyświetla menu programu,
+        [-v] wyświetla wersję programu,
+        [-i] wyświetla skrócone informacje o programie

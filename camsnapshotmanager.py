@@ -5,8 +5,166 @@ import os
 import json
 import sys
 import re
+import smtplib
+from cryptography.fernet import Fernet
 from datetime import datetime as dt
 from crontab import CronTab
+
+
+class Mail:
+
+    def __init__(self, mail_sfile_dir):
+        self.mail_sfile = os.path.join(mail_sfile_dir, "mail.json")
+        self.secret = os.path.join(mail_sfile_dir, ".key.dat")
+
+    def file(self, param="mail"):
+        """Tworzy, odtwarza i czyta plik konfiguracji maila.
+
+        :param param: String: "mail", "user", "pass", "server"
+        :return: None lub String
+        """
+        mail_data_structure = {"mailer": ["mailaddr", "mailuser", "mailpass", ["server", "port", "ssl"]]}
+        if not os.path.exists(self.mail_sfile):
+            with open(self.mail_sfile, "w") as f:
+                json.dump(mail_data_structure, f, indent=4)
+        else:
+            try:
+                with open(self.mail_sfile, "r") as f:
+                    data = json.load(f)
+                if (len(list(data)) != len(mail_data_structure) or
+                        len(data.values()) != len(mail_data_structure.values())):
+                    with open(self.mail_sfile, "w") as f:
+                        json.dump(mail_data_structure, f, indent=4)
+            except json.decoder.JSONDecodeError:
+                with open(self.mail_sfile, "w") as f:
+                    json.dump(mail_data_structure, f, indent=4)
+
+        with open(self.mail_sfile, "r") as f:
+            data = json.load(f)
+        if param == "mail":
+            return data["mailer"][0]
+        elif param == "user":
+            return data["mailer"][1]
+        elif param == "pass":
+            return data["mailer"][2]
+        elif param == "server":
+            return data["mailer"][3]
+
+    def send(self, quantity):
+        """Wysyła wiadomość email informującą o ilości usuniętych plików."""
+        import socket
+
+        # Dekodowanie zaszyfrowanego hasła:
+        with open(self.secret, "r") as f:
+            key = bytes.fromhex(f.read())
+        decoded_password = Fernet(key).decrypt(bytes.fromhex(self.user_password)).decode()
+
+        mail_from = info("title")
+        mail_to = self.user_mail
+        mail_subject = "Usunieto: {} plikow.".format(quantity)
+        mail_body = ("""
+Nazwa hosta: {}
+Wykonanie zakonczone w dniu {} o godzinie {:.8s}"""
+                     .format(socket.gethostname(), dt.now().date(), dt.now().time().isoformat()))
+
+        message = """From: {}
+To: {}
+Subject: {}
+
+{}
+""".format(mail_from, mail_to, mail_subject, mail_body)
+
+        # Wykonanie:
+        try:
+            if self.smtp_server[2]:
+                server = smtplib.SMTP_SSL(self.smtp_server[0], self.smtp_server[1])
+            else:
+                server = smtplib.SMTP(self.smtp_server[0], self.smtp_server[1])
+            server.ehlo()
+            server.login(self.user_login, decoded_password)
+            server.sendmail(self.user_login, mail_to, message)
+            server.close()
+        except Exception as error:
+            print("Sending error: {}".format(error))
+
+    @property
+    def user_mail(self):
+        # Własność adresu email.
+        if self.file("mail") == "mailaddr":
+            return None
+        else:
+            return self.file("mail")
+
+    @user_mail.setter
+    def user_mail(self, value):
+        # Ustawianie adresu email.
+        with open(self.mail_sfile, "r") as f:
+            data = json.load(f)
+        data["mailer"][0] = value
+        with open(self.mail_sfile, "w") as f:
+            json.dump(data, f, indent=4)
+
+    @property
+    def user_login(self):
+        # Własność loginu.
+        if self.file("user") == "mailuser":
+            return None
+        else:
+            return self.file("user")
+
+    @user_login.setter
+    def user_login(self, value):
+        # Ustawianie loginu.
+        with open(self.mail_sfile, "r") as f:
+            data = json.load(f)
+        data["mailer"][1] = value
+        with open(self.mail_sfile, "w") as f:
+            json.dump(data, f, indent=4)
+
+    @property
+    def smtp_server(self, param="default"):
+        # Własność adresu serwera smtp, jego portu i wymagalności SSL.
+        if self.file("server") == ["server", "port", "ssl"]:
+            return None
+        else:
+            server, port, ssl = self.file("server")
+            return [server, int(port), bool(ssl)]
+
+    @smtp_server.setter
+    def smtp_server(self, value):
+        """Ustawianie adresu serwera smtp i jego portu.
+
+        :param value: List ["server", "port", "ssl"]
+        server: adres serwera smtp
+        port: port serwera smtp
+        ssl: True lub False
+        """
+        with open(self.mail_sfile, "r") as f:
+            data = json.load(f)
+        data["mailer"][3] = value
+        with open(self.mail_sfile, "w") as f:
+            json.dump(data, f, indent=4)
+
+    @property
+    def user_password(self):
+        # Własność zaszyfrowanego hasła.
+        if self.file("pass") == "mailpass":
+            return None
+        else:
+            with open(self.secret, "r") as f:
+                return self.file("pass")
+
+    @user_password.setter
+    def user_password(self, value):
+        # Ustawianie i szyfrowanie hasła.
+        with open(self.mail_sfile, "r") as f:
+            data = json.load(f)
+        klucz = Fernet.generate_key()   # Wygeneruj klucz.
+        with open(self.secret, "w") as f:    # Zapisz klucz w ukrytym pliku.
+            f.write(klucz.hex())
+        data["mailer"][2] = Fernet(klucz).encrypt(value.encode()).hex()    # Zaszyfruj i przekaż hasło do słownika.
+        with open(self.mail_sfile, "w") as f:       # Zrzuć zaszyfrowane hasło do pliku mail.json
+            json.dump(data, f, indent=4)
 
 
 def info(param="read"):
@@ -18,13 +176,14 @@ def info(param="read"):
     inf = {
         "title":  "CamSnapshotManager",
         "author": "Paweł Gabryś",
-        "version": "2.2"
+        "version": "2.5"
     }
 
     txt = """{}
 Autor: {}
 Program do zarządzania ujęciami z kamery CCTV.
 Pozwala na ustawianie czasu po jakim pliki zdjęć mają zostać usunięte.
+Obsługuje powiadomienia email.
     
 Parametry:
     [-h] wyświetla informacje o programie,
@@ -47,7 +206,7 @@ def settings_file(param="check", _index=0, **kwargs):
     :param kwargs: active=boolean, timespan=str, path=str
     :return: int lub str lub boolean
     """
-    set_list = ["active", "timespan", "path"]
+    set_list = ["active", "timespan", "mailer", "path"]
     param_list = ["check", "create", "modify", "paths_quantity"]
 
     def file_check():
@@ -57,7 +216,7 @@ def settings_file(param="check", _index=0, **kwargs):
                 # Czy podstawowa struktura jest poprawna
                 try:
                     data_check = json.load(f1)
-                    if len(data_check[_index]) == len(set_list[:2]):
+                    if len(data_check[_index]) == len(set_list[:3]):
                         return True
                     else:
                         return False
@@ -73,7 +232,7 @@ def settings_file(param="check", _index=0, **kwargs):
         # Tworzenie pliku konfiguracyjnego
         with open(sfile, "w") as f:
             # Domyślna zawartość pliku ustawień:
-            settings = [{set_list[0]: "False", set_list[1]: "90d"}, {set_list[2]: ""}]
+            settings = [{set_list[0]: False, set_list[1]: "90d", set_list[2]: False}, {set_list[3]: ""}]
             json.dump(settings, f, indent=4)
     else:
         if file_check():
@@ -86,13 +245,14 @@ def settings_file(param="check", _index=0, **kwargs):
                         if key in set_list:
                             data[_index][key] = value
                             with open(sfile, "w") as nf:
+                                print(data)
                                 json.dump(data, nf, indent=4)
                 elif param == param_list[3]:
                     # Zwraca ilość zdefiniowanych ścieżek.
                     return len(list(data[1:]))
                 elif param in set_list[0:4]:
                     # Zwraca klucz lub wartość klucza, zależnie od parametru.
-                    return data[(_index if param != set_list[2] else _index + 1)][param]
+                    return data[(_index + 1 if param == set_list[3] else _index)][param]
 
 
 def timespan_values(value):
@@ -111,6 +271,9 @@ def timespan_values(value):
 
 def execute():
     """Wykonanie operacji na plikach."""
+    file_num = 0    # Zmienna do liczenia ilości usuniętych plików.
+    executed = False
+
     with open(sfile, "r") as f:
         data = json.load(f)
     indexes = list(range(1, len(list(data[1:])) + 1))       # Określanie wartości ścieżki docelowej w pliku ustawień.
@@ -126,7 +289,12 @@ def execute():
             if os.path.isfile(filepath):
                 if time_diff >= fspan:
                     # Jeżeli różnica czasu wynosi więcej, niż zdefiniowana w ustawieniach, plik zostaje usunięty.
+                    file_num += 1
+                    executed = True
                     os.remove(filepath)
+
+    if executed:
+        mailing("send", file_num)
 
 
 def set_path(param="check"):
@@ -285,9 +453,9 @@ def switch():
                     cron.remove(job)
             cron.write()
 
-    if settings_file() and settings_file("active"):     # Odczyt stanu z pliku konfiguracyjnego.
+    if settings_file() and settings_file("active") == "On":     # Odczyt stanu z pliku konfiguracyjnego.
         if set_path():
-            settings_file("modify", active=False)
+            settings_file("modify", active="Off")
             cron_man("r")
         else:
             # Rezultat próby aktywacji bez zdefiniowanego folderu.
@@ -297,8 +465,84 @@ def switch():
     else:
         u_in = input("Wprowadź czas (hh:mm) uruchomienia programu: ")
 
-        settings_file("modify", active=True)
+        settings_file("modify", active="On")
         cron_man("a", u_in)
+
+
+def mailing(param="addr", *quantity):
+    """Pozwala ustawić system wysyłania powiadomień email.
+
+    :param param: String: "addr" - zwraca ustawiony email, "set"
+    :return: String lub None
+    """
+    params = ["addr", "set", "send"]
+    msg = Mail(program_dir)
+    msg.file()
+
+    # Sprawdź parametr:
+    if param == params[0]:
+        return msg.user_mail
+    elif param == params[1]:
+        if settings_file("mailer"):
+            settings_file("modify", mailer=False)
+        else:
+            all_good = False
+            while not all_good:     # Pętla poprawnej kombinacji serwer_smtp:port.
+                server_and_port = input("""
+Podaj adres serwera smtp i port (adres:port). 
+[Enter] by powrócić: """)
+                if server_and_port == "":
+                    break
+                else:
+                    # Czy format jest błędny lub port nie jest liczbą całkowitą:
+                    if len(server_and_port.split(":")) != 2 or not server_and_port.split(":")[1].isdigit():
+                        print("Spróbuj ponownie.")
+                        continue
+                    ssl = input("SSL ([tak] lub [nie]: ")   # Zapytanie o protokół SSL.
+                    if ssl.lower() == "tak":
+                        ssl = "Yes"
+                    elif ssl.lower() == "nie":
+                        ssl = "No"
+                    else:
+                        print("Spróbuj ponownie.")
+                        continue
+                # Formatowanie i zapis parametru:
+                msg.smtp_server = [server_and_port.split(":")[0], server_and_port.split(":")[1], ssl]
+                all_good = True
+
+            login = input("Login konta email: ")    # Ustawianie parametru loginu.
+            if login != "":
+                msg.user_login = login
+
+            pwd = input("Hasło konta email: ")      # Ustawianie parametru hasła i przekazanie do szyfrowania i zapisu.
+            if pwd != "":
+                msg.user_password = pwd
+                keydir = os.path.join(program_dir, ".key.dat")
+                mset = os.path.join(program_dir, "mail.json")
+                with open(keydir, "r") as f:
+                    key = bytes.fromhex(f.read())
+                with open(mset, "r")as f:
+                    dane = json.load(f)
+                haselko = dane["mailer"][2]
+                print(Fernet(key).decrypt(bytes.fromhex(haselko)).decode())
+
+            all_good = False
+            while not all_good:     # Pętla poprawności formatu adresu email.
+                email = input("""
+Wprowadź adres email do otrzymywania powiadomień: 
+[Enter] by powrócić: """)
+                podzielony = email.split("@")
+                if email == "":
+                    break
+                elif len(podzielony) != 2 or len(podzielony[1].split(".")) < 2:
+                    print("Spróbuj ponownie.")
+                    continue
+                else:
+                    msg.user_mail = email
+                    settings_file("modify", mailer=True)
+                    all_good = True
+    elif param == params[2]:
+        msg.send(int(quantity[0]))
 
 
 def main():
@@ -306,9 +550,10 @@ def main():
     while True:
         if not os.path.exists(sfile):
             settings_file("create")
-        operation = "Wyłącz" if settings_file("active") is True else "Włącz"    # Stan automatyzacji.
-        main_opt = {"1": f"{operation}", "2": "Wskaż ścieżki do folderów", "3": "Zmień okres przechowywania zdjęć",
-                    "4": "Wyjście"}     # Lista opcji.
+        operation = "Wyłącz" if settings_file("active") is True else "Włącz"    # Przełącznik automatyzacji.
+        mailer = "Wyłącz" if settings_file("mailer") is True else "Włącz"  # Przełącznik mailera.
+        main_opt = {"1": f"{operation} automatyzację", "2": "Wskaż ścieżki do folderów",
+                    "3": "Zmień okres przechowywania zdjęć", "4": f"{mailer} mailer", "x": "Wyjście"}     # Lista opcji.
         opts = list(main_opt)
 
         txt = """
@@ -316,20 +561,27 @@ def main():
 {1}
 {0}
 
-Status: {2}
-Czas przechowywania: {3}
+Automatyzacja: {2}
+Mailer: {3}
+Czas przechowywania: {4}
 """.format("-" * len(info("title")), info("title"),
-            "Wyłączony" if not settings_file("active") is True else "Włączony", settings_file("timespan"))
+            "Wyłączona" if not settings_file("active") is True else "Włączona",
+           "Nieaktywny" if not settings_file("mailer") is True else mailing(), settings_file("timespan"))
         print(txt)
         for opt, desc in main_opt.items():
-            print("[{}] - {}".format(opt, desc))
+            if opt == opts[4]:
+                print("{}\n[{}] - {}".format("-" * len(info("title")), opt, desc))
+            else:
+                print("[{}] - {}".format(opt, desc))
 
         u_in = input("\nWybierz opcję i zatwierdź klawiszem [Enter]: ")
 
         if u_in not in str(list(main_opt)):
             print("Spróbuj ponownie.")
-        elif u_in == opts[3]:
+        elif u_in == opts[4]:
             break
+        elif u_in == opts[3]:
+            mailing("set")
         elif u_in == opts[2]:
             set_time()
         elif u_in == opts[1]:

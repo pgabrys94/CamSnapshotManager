@@ -122,7 +122,7 @@ Subject: {}
             json.dump(data, f, indent=4)
 
     @property
-    def smtp_server(self, param="default"):
+    def smtp_server(self):
         # Własność adresu serwera smtp, jego portu i wymagalności SSL.
         if self.file("server") == ["server", "port", "ssl"]:
             return None
@@ -151,8 +151,7 @@ Subject: {}
         if self.file("pass") == "mailpass":
             return None
         else:
-            with open(self.secret, "r") as f:
-                return self.file("pass")
+            return self.file("pass")
 
     @user_password.setter
     def user_password(self, value):

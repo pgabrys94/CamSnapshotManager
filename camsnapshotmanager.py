@@ -11,8 +11,90 @@ from datetime import datetime as dt
 from crontab import CronTab
 
 
-class Mail:
+class WeekdayAction:
+    """
+    Obsługa czasu i daty automatyzacji.
+    """
+    def __init__(self):
+        self.weekdays = {"pon": False,
+                         "wt": False,
+                         "śr": False,
+                         "czw": False,
+                         "pt": False,
+                         "sob": False,
+                         "nie": False
+                         }
+        self.__runtime_h = ""
+        self.__runtime_m = ""
 
+    def __call__(self, *weekday):
+        daylist = []
+        if not weekday:
+            for day in self.weekdays:
+                if self.weekdays[day] is True:
+                    daylist.append(day)
+        elif weekday:
+            for day in weekday:
+                daylist.append(self.weekdays[day])
+        if weekday == "full":
+            answer = {"days": daylist, "time": self.show_time}
+        else:
+            answer = daylist[0] if len(daylist) == 1 else daylist
+        return answer
+
+    def show_days(self, state=True):
+        """Wyświetla dni o danym statusie.
+
+        :param state: Boolean
+        :return: List
+        """
+        return [day for day in self.weekdays if self.weekdays[day] is state]
+
+    def switch_days(self, *weekday):
+        """Przełączanie aktywnych dni.
+
+        :param weekday: String: "all_true", "all_False", "pon", "wt"...
+        :return:
+        """
+        if "all_true" in weekday:
+            for day in self.weekdays:
+                self.weekdays[day] = True
+        elif "all_false" in weekday:
+            for day in self.weekdays:
+                self.weekdays[day] = False
+        elif not weekday:
+            for day in self.weekdays:
+                self.weekdays[day] = not self.weekdays[day]
+        else:
+            for day in weekday:
+                self.weekdays[day] = not self.weekdays[day]
+
+    @property
+    def show_time(self):
+        """Wyświetla zapisaną w instancji godzinę.
+
+        :return: String
+        """
+        if "" not in [self.__runtime_h, self.__runtime_m]:
+            return ":".join([self.__runtime_h, self.__runtime_m])
+        else:
+            return ""
+
+    @show_time.setter
+    def show_time(self, value):
+        """Pozwala na zapis godziny w instancji.
+
+        :param value: String w formacie "hh:mm".
+        """
+        value = value.split(":")
+        self.__runtime_h = value[0] if value[0] != "" else self.__runtime_h
+        self.__runtime_m = value[1] if value[1] != "" else self.__runtime_m
+
+
+class Mail:
+    """
+    Obsługa powiadomień email.
+    """
     def __init__(self, mail_sfile_dir):
         self.mail_sfile = os.path.join(mail_sfile_dir, "mail.json")
         self.secret = os.path.join(mail_sfile_dir, ".key.dat")
@@ -430,31 +512,41 @@ Domyślnie: 90d
 
 
 def switch():
+    czas = WeekdayAction()
     """Przełączenie automatyzacji procesu za pomocą menedżera Cron."""
-    def cron_man(param, *time):
+    def cron_man(param):
         """Edytowanie CronTab.
 
         :param param: String: "a" by dodać, "r" by usunąć
-        :param time: String: "hh:mm"
         """
-        param_list = ["a", "r"]
+        d_to_n = {      # Konwersja dni na cyfry
+            "nie": "0",
+            "pon": "1",
+            "wt": "2",
+            "śr": "3",
+            "czw": "4",
+            "pt": "5",
+            "sob": "6"
+
+        }
         # Pobierz nazwę użytkownika uruchamiającego program i użyj jego Crontaba:
         cron = CronTab(user=os.getlogin())
         command = "/usr/bin/python3.11 {} -x".format(pfile)     # Polecenie ze zdefiniowaną wersją interpretera.
-        if param == param_list[0]:  # Dodaj do Crontab:
-            stime = str(time[0]).split(":")     # Rozdzielanie godzin i minut
+        if param == "a":  # Dodaj do Crontab:
+            stime = czas.show_time.split(":")     # Rozdzielanie godzin i minut
             job = cron.new(command=command)
-            job.setall("{} {} * * *".format(stime[1], stime[0]))   # Czas wykonania
+            # Czas i dni wykonania:
+            job.setall("{} {} * * {}".format(stime[1], stime[0], ",".join(d_to_n[day] for day in czas.show_days())))
             cron.write()
-        elif param == param_list[1]:    # Usuń z Crontab:
+        elif param == "r":    # Usuń z Crontab:
             for job in cron:
                 if job.command == command:
                     cron.remove(job)
             cron.write()
 
-    if settings_file() and settings_file("active") == "On":     # Odczyt stanu z pliku konfiguracyjnego.
+    if settings_file() and settings_file("active") is True:     # Odczyt stanu z pliku konfiguracyjnego.
         if set_path():
-            settings_file("modify", active="Off")
+            settings_file("modify", active=False)
             cron_man("r")
         else:
             # Rezultat próby aktywacji bez zdefiniowanego folderu.
@@ -462,10 +554,89 @@ def switch():
             print("\n{0}\n{1}\n{0}".format("-" * len(txt), txt))
             set_path("set")
     else:
-        u_in = input("Wprowadź czas (hh:mm) uruchomienia programu: ")
+        options = {"[1]": "Wybierz godzinę uruchomienia programu",
+                   "[2]": "Wybierz dni uruchomienia"
+                   }
+        choosing = True
+        while choosing:
+            print("""{0}
+Aby aktywować automatyzację, podaj godzinę oraz wybierz dni, w które program ma być wykonany.
+            
+Godzina uruchomienia: {1}
+Dni tygodnia: {2}
+{0}
+""".format("-" * 30, czas.show_time, czas.show_days()))
+            for k, v in options.items():
+                print("{} - {}".format(k, v))
+            if czas.show_time == "" or not czas.show_days():
+                cancel = True
+                print("[Enter] - Anuluj")
+            else:
+                cancel = False
+                print("[Enter] - AKTYWUJ")
 
-        settings_file("modify", active="On")
-        cron_man("a", u_in)
+            choice = input("\nWybierz opcję i zatwierdź [Enter]: ")
+            if choice == "":
+                if cancel:
+                    choosing = False
+                else:
+                    settings_file("modify", active="On")
+                    cron_man("a")
+                    choosing = False
+            elif choice == "1":
+                while True:
+                    u_in = input("Wprowadź czas (hh:mm) uruchomienia programu ([Enter] by powrócić): ")
+                    splits = u_in.split(":")
+                    if u_in == "":
+                        break
+                    elif splits[0].isdigit() and splits[1].isdigit():
+                        if int(splits[0]) in list(range(0, 24)) and int(splits[1]) in list(range(0, 60)):
+                            czas.show_time = u_in
+                            break
+                        else:
+                            print("Spróbuj ponownie.")
+                    else:
+                        print("Spróbuj ponownie.")
+            elif choice == "2":
+                while True:
+                    green = "\033[92m"
+                    red = "\033[91m"
+                    reset = "\033[0m"
+                    print("-" * 30)
+                    n = 0
+                    wd = {
+                                "pon": "Poniedziałek",
+                                "wt": "Wtorek",
+                                "śr": "Środa",
+                                "czw": "Czwartek",
+                                "pt": "Piątek",
+                                "sob": "Sobota",
+                                "nie": "Niedziela"
+                                }
+                    for k, v in wd.items():
+                        if czas(k) is True:
+                            print("[{}] - {}{}{}".format(n + 1, green, v, reset))
+                        else:
+                            print("[{}] - {}{}{}".format(n + 1, red, v, reset))
+                        n += 1
+                    print("[a] - przełącz wszystkie")
+                    print("\n[Enter] - powrót")
+                    print("-" * 30)
+                    daychoice = input("Wybierz dzień: ")
+                    if daychoice == "":
+                        break
+                    elif daychoice == "a":
+                        czas.switch_days()
+                    elif daychoice.isdigit():
+                        if int(daychoice) in list(range(1, 8)):
+                            print("OK")
+                            czas.switch_days(list(wd)[int(daychoice) - 1])
+                        else:
+                            print("Spróbuj ponownie.")
+                    else:
+                        print("Spróbuj ponownie.")
+            else:
+                print("Spróbuj ponownie.")
 
 
 def mailing(param="addr", *quantity):

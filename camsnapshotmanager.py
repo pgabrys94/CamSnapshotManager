@@ -257,7 +257,7 @@ def info(param="read"):
     inf = {
         "title":  "CamSnapshotManager",
         "author": "Paweł Gabryś",
-        "version": "2.5"
+        "version": "2.8"
     }
 
     txt = """{}
@@ -326,7 +326,6 @@ def settings_file(param="check", _index=0, **kwargs):
                         if key in set_list:
                             data[_index][key] = value
                             with open(sfile, "w") as nf:
-                                print(data)
                                 json.dump(data, nf, indent=4)
                 elif param == param_list[3]:
                     # Zwraca ilość zdefiniowanych ścieżek.
@@ -580,7 +579,7 @@ Dni tygodnia: {2}
                 if cancel:
                     choosing = False
                 else:
-                    settings_file("modify", active="On")
+                    settings_file("modify", active=True)
                     cron_man("a")
                     choosing = False
             elif choice == "1":
